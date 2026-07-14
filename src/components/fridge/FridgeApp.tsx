@@ -1036,79 +1036,86 @@ function PlanMealSheet({
   const canSave = dish.trim().length > 0 && ingredients.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-foreground/20 px-3 pb-3" onClick={onClose}>
+    <div
+      className="fixed inset-x-0 top-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-50 flex items-end bg-foreground/20 px-3 pb-3"
+      onClick={onClose}
+    >
       <form
-        className="mx-auto max-h-[88dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-border bg-background p-4 shadow-lg"
+        className="mx-auto flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg"
         onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
           onSave({ date, meal, dish, ingredients });
         }}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted-foreground">已选 {items.length} 项食材</p>
-            <h2 className="text-lg font-semibold tracking-normal">安排做菜</h2>
-          </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>取消</Button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2">
-          <label className="space-y-1.5">
-            <span className="text-sm text-muted-foreground">日期</span>
-            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-          </label>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {MEALS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              className={cn(
-                'h-10 rounded-lg border border-border text-sm font-medium',
-                meal === option.key ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground',
-              )}
-              onClick={() => setMeal(option.key)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        <label className="space-y-1.5">
-          <span className="text-sm text-muted-foreground">菜名</span>
-          <Input value={dish} placeholder="例如 西红柿炒蛋" onChange={(event) => setDish(event.target.value)} />
-        </label>
-
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium text-muted-foreground">食材用量</h3>
-          {items.map((item) => (
-            <div key={item.id} className="grid grid-cols-[1fr_88px_36px] items-center gap-2 rounded-lg border border-border bg-card p-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.name}</p>
-                <p className="text-xs text-muted-foreground">剩余 {formatQty(item.qty)}{item.unit}</p>
-              </div>
-              <Input
-                type="number"
-                min="0"
-                max={item.qty}
-                step="0.1"
-                value={uses[item.id] ?? ''}
-                className="text-right"
-                aria-label={`${item.name}消耗数量`}
-                onChange={(event) => {
-                  setUses((current) => ({ ...current, [item.id]: event.target.value }));
-                }}
-              />
-              <span className="text-sm text-muted-foreground">{item.unit}</span>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm text-muted-foreground">已选 {items.length} 项食材</p>
+              <h2 className="text-lg font-semibold tracking-normal">安排做菜</h2>
             </div>
-          ))}
-        </section>
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>取消</Button>
+          </div>
 
-        <Button type="submit" className="w-full" disabled={!canSave}>
-          保存安排
-        </Button>
+          <div className="grid grid-cols-1 gap-2">
+            <label className="space-y-1.5">
+              <span className="text-sm text-muted-foreground">日期</span>
+              <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {MEALS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={cn(
+                  'h-10 rounded-lg border border-border text-sm font-medium',
+                  meal === option.key ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground',
+                )}
+                onClick={() => setMeal(option.key)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <label className="space-y-1.5">
+            <span className="text-sm text-muted-foreground">菜名</span>
+            <Input value={dish} placeholder="例如 西红柿炒蛋" onChange={(event) => setDish(event.target.value)} />
+          </label>
+
+          <section className="space-y-2 pt-2">
+            <h3 className="text-sm font-medium text-muted-foreground">食材用量</h3>
+            {items.map((item) => (
+              <div key={item.id} className="grid grid-cols-[1fr_88px_36px] items-center gap-2 rounded-lg border border-border bg-card p-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">剩余 {formatQty(item.qty)}{item.unit}</p>
+                </div>
+                <Input
+                  type="number"
+                  min="0"
+                  max={item.qty}
+                  step="0.1"
+                  value={uses[item.id] ?? ''}
+                  className="text-right"
+                  aria-label={`${item.name}消耗数量`}
+                  onChange={(event) => {
+                    setUses((current) => ({ ...current, [item.id]: event.target.value }));
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">{item.unit}</span>
+              </div>
+            ))}
+          </section>
+        </div>
+
+        <div className="shrink-0 border-t border-border bg-background p-3">
+          <Button type="submit" className="w-full" disabled={!canSave}>
+            保存安排
+          </Button>
+        </div>
       </form>
     </div>
   );
@@ -1127,9 +1134,12 @@ function MealDetailSheet({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-foreground/20 px-3 pb-3" onClick={onClose}>
+    <div
+      className="fixed inset-x-0 top-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-50 flex items-end bg-foreground/20 px-3 pb-3"
+      onClick={onClose}
+    >
       <div
-        className="mx-auto max-h-[82dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-border bg-background p-4 shadow-lg"
+        className="mx-auto max-h-full w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-border bg-background p-4 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
