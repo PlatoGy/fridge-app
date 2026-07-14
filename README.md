@@ -1,236 +1,231 @@
-# Next.js Native App Template
+# 我的冰箱
 
-A boilerplate for building native-feeling apps with Next.js 16. Ships as a workout tracker; swap in your own domain.
+一个自用的移动端冰箱管理 PWA，用来记录冰箱库存、安排每天早/中/晚做什么菜、自动沉淀菜谱，并统计食材消耗。
 
-**Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · oRPC · TanStack Query · SQLite (better-sqlite3) · PWA
+## 项目来源
 
----
+本项目基于 `Next.js Native App Template` 改造而来。原模板是一个 Workout Tracker，提供了移动端原生感较强的基础设施：
 
-## Quick start
+- Next.js 16 App Router
+- React 19 + TypeScript
+- Tailwind CSS 4
+- shadcn/ui 风格组件
+- PWA / Add to Home Screen
+- 横向滑动 Tab
+- iOS PWA 底部导航和安全区适配
+
+当前业务功能已替换为个人冰箱应用，但仍保留了模板里的移动端 AppShell、底部 Tab、PWA 布局和部分通用 UI 组件。
+
+## 功能
+
+- 冰箱库存：添加食材、单位、数量
+- 库存编辑：修改数量和单位，左滑删除食材
+- 做菜计划：点按食材安排做菜，长按进入多选食材
+- 多食材用量：安排做菜时分别填写每个食材消耗量
+- 日历：按周查看早上、中午、晚上安排的菜
+- 日历详情：点进某餐查看完整菜品和食材消耗
+- 菜谱：做过的菜自动加入菜谱
+- 我的：查看食材总消耗量、做菜数目、菜谱数量
+- 恢复记录：从消耗记录中提取，删除日历记录并恢复库存
+- 数据库：通过 Neon PostgreSQL 保存数据
+
+## 技术栈
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- lucide-react
+- Neon PostgreSQL
+- `@neondatabase/serverless`
+- Vercel
+
+## 本地安装
 
 ```bash
 npm install
-npm run dev     # http://localhost:3000
 ```
 
-On iPhone: open in Safari, tap Share > Add to Home Screen. The app runs fullscreen with a native bottom tab bar.
+创建本地环境变量文件：
 
----
-
-## How the native layout works
-
-The entire UI is a single-page app (`src/app/page.tsx`) that uses **horizontal scroll-snap** for tab navigation. This gives you swipe-between-tabs behavior identical to native iOS/Android apps, with no client-side router for tab changes.
-
-### The shell structure
-
-```
-<div class="h-dvh flex-col overflow-hidden">     ← full viewport height
-  <div class="flex-1 min-h-0 flex snap-x          ← horizontal scroll container
-       snap-mandatory overflow-x-auto"
-       style="align-items: flex-start">
-    <TabPane style="height: {measured}px" />       ← each pane is exactly
-    <TabPane style="height: {measured}px" />          the container height
-    <TabPane style="height: {measured}px" />
-    ...
-  </div>
-  <BottomNav class="shrink-0" />                   ← IN the flex column, not fixed
-</div>
+```bash
+cp .env.example .env.local
 ```
 
-Key files:
-- `src/components/shared/AppShell.tsx` — the outer shell and bottom nav
-- `src/components/shared/TabContext.tsx` — scroll tracking, URL sync, pane height measurement
-- `src/components/shared/TabPane.tsx` — individual tab wrapper
+在 `.env.local` 中填入 Neon 数据库连接串：
 
-### Why this layout exists (iOS PWA gotchas)
-
-Every decision here was made to work around iOS standalone PWA behavior. If you change the layout, read this section first.
-
-#### Bottom nav: flex flow, not `position: fixed`
-
-**Do NOT use `position: fixed; bottom: 0` for the bottom nav.** On iOS standalone PWAs, `fixed bottom-0` places the element at the viewport bottom (793px on an iPhone 15), which is visually above the home indicator. There is always a system-drawn gap below it.
-
-The fix: the nav is a normal **flex child** (`shrink-0`) inside the `h-dvh flex-col` container. iOS resolves `h-dvh` in a flex column to include the home indicator region, so flex layout pushes the nav to the true screen bottom.
-
-```tsx
-// AppShell.tsx — the nav is INSIDE the h-dvh div
-<div className="h-dvh flex flex-col overflow-hidden">
-  <div className="flex-1 min-h-0 ...">  {/* scroll container */}
-    {children}
-  </div>
-  <BottomNav className="shrink-0" />     {/* normal flow, not fixed */}
-</div>
+```env
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
 ```
 
-If you move the nav outside this container or add `fixed`/`absolute` positioning, it will float above the screen bottom on iOS.
+启动开发服务：
 
-#### Pane heights: JS-measured, not CSS
-
-Flexbox `align-items: stretch` (the default) causes all tab panes to expand to the height of the tallest pane's content. A tab with 200px of content would have thousands of pixels of dead scrollable space because it inherits the height of the longest tab.
-
-CSS solutions (`h-full`, `100dvh`, `-webkit-fill-available`, Grid) all fail on iOS Safari.
-
-The fix is two parts:
-
-1. **`align-items: flex-start`** on the scroll container — prevents cross-axis stretching
-2. **ResizeObserver** in `TabContext` measures the container's `clientHeight` and exposes it as `paneHeight`. Each `TabPane` sets `height: ${paneHeight}px` as an inline style. An explicit pixel value cannot be misinterpreted.
-
-```tsx
-// TabContext.tsx — measures the scroll container
-useEffect(() => {
-  const ro = new ResizeObserver(([entry]) => {
-    setPaneHeight(entry.contentRect.height);
-  });
-  ro.observe(container);
-  return () => ro.disconnect();
-}, []);
-
-// TabPane.tsx — applies the measured height
-<div style={{ height: h ? `${h}px` : '100%' }}>
+```bash
+npm run dev
 ```
 
-#### Body background: killing the bottom strip
+默认端口来自 `package.json`：
 
-iOS draws a system-controlled strip below the app viewport. Its color comes from `background_color` in `manifest.json`, the `theme-color` meta tag, and the body's computed `background-color`.
-
-Two things make this strip invisible:
-
-1. **Hex fallback colors** on `html` and `body` — iOS can't parse oklch, so the CSS custom properties alone won't work. Always set a hex `background-color` alongside them.
-
-2. **Body stretch** — `min-height: 100dvh` and `padding-bottom: env(safe-area-inset-bottom)` on body force it to fill the full viewport and paint its background into the home indicator region.
-
-```css
-/* globals.css */
-body {
-  background-color: #f5f0e8;        /* hex fallback iOS can read */
-  min-height: 100dvh;               /* stretch to full viewport */
-  padding-bottom: env(safe-area-inset-bottom);  /* paint into safe area */
-}
+```text
+http://localhost:3512
 ```
 
-#### Theme sync: no flash on load
+如果修改了 `.env.local`，需要重启 `npm run dev`，Next.js 才会重新读取环境变量。
 
-The layout includes an inline `<script>` in `<head>` that reads `localStorage.theme` and applies the dark class synchronously, before React hydrates. This prevents the white-flash-then-dark-mode problem.
+## Neon 免费数据库配置
 
-```tsx
-// layout.tsx
-<script dangerouslySetInnerHTML={{
-  __html: `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);var h=document.documentElement;h.classList.toggle('dark',d);h.style.colorScheme=d?'dark':'light';h.style.backgroundColor=d?'#1a1714':'#f5f0e8'}catch(e){}})()`
-}} />
+1. 打开 Neon 官网并注册账号：
+
+   ```text
+   https://neon.com
+   ```
+
+2. 创建一个免费项目。
+
+3. 在 Neon 控制台中找到 `Connect`，复制 PostgreSQL 连接串。
+
+4. 推荐创建两个分支：
+
+   - `production`：线上 Vercel Production 使用
+   - `develop`：本地开发和 Vercel Preview 使用
+
+5. 本地 `.env.local` 使用 develop 分支连接串：
+
+   ```env
+   DATABASE_URL=postgresql://...develop-branch...?sslmode=require&channel_binding=require
+   ```
+
+6. 第一次访问应用时，服务端会自动创建表：
+
+   ```sql
+   CREATE TABLE IF NOT EXISTS fridge_state (
+     id TEXT PRIMARY KEY,
+     data JSONB NOT NULL,
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   );
+   ```
+
+当前版本为了保持第一版简单，使用 PostgreSQL 的 `JSONB` 字段保存整份冰箱状态。数据库仍然是 PostgreSQL，不是单独的 JSON 数据库。后续如果需要复杂统计、多用户或共享冰箱，可以再拆成关系型表。
+
+## 验证数据库写入
+
+启动应用后，添加一个食材，然后在 Neon SQL Editor 执行：
+
+```sql
+select id, data, updated_at
+from fridge_state;
 ```
 
-#### `env(safe-area-inset-bottom)` is 0 in standalone mode
+如果看到 `id = default` 的记录，说明应用已经成功写入 Neon。
 
-Because the iOS standalone viewport already excludes the safe area, `env(safe-area-inset-bottom)` returns 0. The nav still includes `padding-bottom: calc(env(safe-area-inset-bottom, 0px) / 2)` for devices/modes where it is nonzero, but don't rely on it for layout.
+## 部署到 Vercel
 
----
+1. 将代码推送到 GitHub。
 
-## Service worker
+2. 打开 Vercel：
 
-`public/sw.js` handles offline support:
+   ```text
+   https://vercel.com
+   ```
 
-- **Navigation requests**: network-first, falls back to cache
-- **Static assets**: stale-while-revalidate (serves cached instantly, updates in background)
-- **API calls** (`/rpc/`): always go to network, never cached
+3. `Add New...` -> `Project`，选择 GitHub 仓库并导入。
 
-**After layout changes, bump `CACHE_NAME`** in `sw.js` (e.g. `app-v2` → `app-v3`). iOS can hold onto the old service worker even after closing and reopening the app.
+4. Framework Preset 选择或保持为：
 
----
+   ```text
+   Next.js
+   ```
 
-## Tab navigation
+5. Build 设置通常不用改：
 
-Tab switching works via `container.scrollTo({ behavior: 'smooth' })`. The `TabContext` tracks scroll position with `requestAnimationFrame` during scroll and derives the active tab from `Math.round(scrollLeft / clientWidth)`.
+   ```text
+   Install Command: npm install
+   Build Command: npm run build
+   Output Directory: 留空
+   ```
 
-URLs update via `history.replaceState` (no full page navigation) after scroll settles. Deep links work through URL hash (`/#log`, `/#timer`, etc.) — hash-to-tab mapping runs on mount.
+6. 在 Vercel 项目中配置环境变量：
 
-The bottom nav supports **drag-to-navigate**: pointer-capture on the nav bar lets you slide your finger across tabs to switch between them.
+   `Settings` -> `Environment Variables`
 
----
+   添加：
 
-## Standalone pages (Settings, Export)
+   ```text
+   Name: DATABASE_URL
+   Value: 你的 Neon PostgreSQL 连接串
+   ```
 
-Settings and Export are separate Next.js routes (`/settings`, `/export`) that render inside `AppShell` without a `TabProvider`. In this mode:
+7. 推荐环境变量分配：
 
-- The shell shows a "Back" header with a View Transitions API animation (iOS-like push/pop)
-- The bottom nav renders as links back to the main app
-- The outer div uses `min-h-dvh` instead of `h-dvh` so content can scroll naturally
+   - Production：Neon production 分支连接串
+   - Preview：Neon develop 分支连接串
+   - Development：Neon develop 分支连接串
 
----
+8. 点击 Deploy。
 
-## Architecture overview
+9. 部署后，在网页里添加一个食材，再去 Neon SQL Editor 查询 `fridge_state`，确认线上也能写入。
 
+## 分支建议
+
+推荐使用：
+
+```text
+main       -> Vercel Production -> Neon production
+develop    -> Vercel Preview    -> Neon develop
 ```
+
+如果现在只有 `develop` 分支，也可以先把 Vercel Production Branch 设置为 `develop`。等项目稳定后再拆出 `main`。
+
+## 环境变量安全
+
+不要提交真实数据库连接串。
+
+本项目中：
+
+- `.env.local`：本地真实配置，已被 `.gitignore` 忽略
+- `.env.example`：示例配置，可以提交
+- Vercel 环境变量：在 Vercel Dashboard 中配置
+
+如果连接串或密码曾经公开过，建议在 Neon 控制台里重置密码，然后同步更新：
+
+- 本地 `.env.local`
+- Vercel 的 `DATABASE_URL`
+
+## 常用命令
+
+```bash
+npm install
+npm run dev
+npm run build
+npx eslint src/components/fridge/FridgeApp.tsx
+```
+
+## 目录结构
+
+```text
 src/
 ├── app/
-│   ├── layout.tsx          # fonts, metadata, viewport, theme sync script
-│   ├── page.tsx            # single-page app shell (all tabs)
-│   ├── providers.tsx       # QueryClientProvider
-│   ├── globals.css         # tailwind, oklch theme, animations, iOS fixes
-│   ├── rpc/[[...rest]]/    # oRPC catch-all API route
-│   ├── settings/           # standalone settings page
-│   └── export/             # standalone export page
+│   ├── api/fridge/route.ts      # 冰箱数据 API，读写 Neon
+│   ├── page.tsx                 # 主入口，四个底部 Tab
+│   ├── layout.tsx               # metadata、PWA、字体和主题初始化
+│   ├── calendar/page.tsx        # 日历 Tab 刷新重定向
+│   ├── recipes/page.tsx         # 菜谱 Tab 刷新重定向
+│   └── me/page.tsx              # 我的 Tab 刷新重定向
 ├── components/
-│   ├── shared/             # AppShell, TabContext, TabPane, HapticsProvider, etc.
-│   ├── ui/                 # shadcn/ui primitives (button, card, badge, etc.)
-│   ├── today/              # Today dashboard
-│   ├── log/                # Log forms (workout, rest day, note)
-│   ├── timer/              # Workout timer
-│   ├── history/            # Weekly review / stats
-│   ├── templates/          # Workout template management
-│   ├── goals/              # Goal tracking
-│   ├── settings/           # Settings screen
-│   └── export/             # Data export/import
-├── hooks/                  # useProfile, useEvents, useSchedule, useTemplates, etc.
+│   ├── fridge/FridgeApp.tsx     # 冰箱业务 UI 和状态逻辑
+│   ├── shared/AppShell.tsx      # 移动端外壳和底部导航
+│   ├── shared/TabContext.tsx    # 横向 Tab 滑动和 URL 同步
+│   └── ui/                      # 通用 UI 组件
 └── lib/
-    ├── orpc.ts             # oRPC client (browser-side)
-    ├── types.ts            # all TypeScript types
-    ├── defaults.ts         # default profile, schedule, templates
-    ├── analytics.ts        # streak calc, weekly review, insights
-    ├── view-transition.ts  # View Transitions API wrapper
-    ├── sw-register.ts      # service worker registration
-    └── server/
-        ├── db.ts           # SQLite setup + migrations
-        ├── dao.ts          # data access (CRUD for all tables)
-        └── router.ts       # oRPC router (all API procedures)
+    └── server/fridge-db.ts      # Neon PostgreSQL 连接和建表逻辑
 ```
 
----
+## PWA 使用
 
-## Data layer
+在 iPhone 上：
 
-- **Database**: SQLite via `better-sqlite3`, stored at `data/app.db`. WAL mode. Auto-migrates on first access.
-- **API**: oRPC with Zod validation. All calls go through `/rpc/` — a single Next.js catch-all route.
-- **Client state**: TanStack Query. Hooks in `src/hooks/` wrap oRPC calls with optimistic updates and cache invalidation.
-- **No auth**: single-user, device-local. The profile table has one row (id = `'default'`).
+1. 用 Safari 打开部署后的站点。
+2. 点击分享按钮。
+3. 选择 `Add to Home Screen`。
+4. 从桌面图标打开后，会以接近原生 App 的全屏方式运行。
 
----
-
-## Adapting to your own app
-
-1. **Types** — Replace the types in `src/lib/types.ts` with your domain
-2. **Schema** — Update the `migrate()` function in `src/lib/server/db.ts`
-3. **DAO** — Rewrite `src/lib/server/dao.ts` for your tables
-4. **Router** — Update procedures in `src/lib/server/router.ts`
-5. **Hooks** — Rewrite hooks in `src/hooks/` to match your new API
-6. **Screens** — Replace the screen components in `src/components/`
-7. **Tabs** — Change `TAB_ROUTES` in `TabContext.tsx` and `NAV_ITEMS` in `AppShell.tsx`
-8. **Defaults** — Update `src/lib/defaults.ts` with your initial data
-9. **PWA** — Update `public/manifest.json` with your app name and icons
-10. **Theme** — Edit the oklch values in `globals.css` (keep the hex fallbacks in sync)
-
-The shared infrastructure (`AppShell`, `TabContext`, `TabPane`, `HapticsProvider`, all UI components) should not need changes.
-
----
-
-## Things that will break if you change them
-
-| What | Why |
-|---|---|
-| Moving `<BottomNav>` outside the `h-dvh` div | Nav floats above screen bottom on iOS PWA |
-| Adding `position: fixed` to the nav | Same — doesn't reach screen bottom on iOS |
-| Removing `align-items: flex-start` from scroll container | All panes stretch to tallest pane height |
-| Removing the ResizeObserver pane height measurement | Panes won't have correct height on iOS |
-| Removing hex `background-color` fallbacks | iOS renders black strip below app |
-| Removing `min-height: 100dvh` from body | System-drawn strip visible at bottom |
-| Forgetting to bump `CACHE_NAME` in sw.js after changes | iOS serves stale cached version |
-| Using CSS viewport units for pane heights | iOS Safari ignores them in flex children |
