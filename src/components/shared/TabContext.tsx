@@ -8,10 +8,9 @@ import {
   useState,
   useEffect,
   type ReactNode,
-  type RefObject,
 } from 'react';
 
-export const TAB_ROUTES = ['/', '/log', '/timer', '/history', '/templates', '/goals'] as const;
+export const TAB_ROUTES = ['/', '/calendar', '/recipes', '/me'] as const;
 export type TabRoute = (typeof TAB_ROUTES)[number];
 
 interface TabContextValue {
@@ -20,7 +19,7 @@ interface TabContextValue {
   scrollToTab: (tab: TabRoute, opts?: { searchParams?: string }) => void;
   logSearchParams: string | null;
   clearLogSearchParams: () => void;
-  containerRef: RefObject<HTMLDivElement | null>;
+  setContainerElement: (node: HTMLDivElement | null) => void;
   paneHeight: number;
 }
 
@@ -40,6 +39,9 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const urlTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number>(0);
   const scrollingRef = useRef(false);
+  const setContainerElement = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+  }, []);
 
   const scrollToTab = useCallback((tab: TabRoute, opts?: { searchParams?: string }) => {
     const index = TAB_ROUTES.indexOf(tab);
@@ -119,24 +121,26 @@ export function TabProvider({ children }: { children: ReactNode }) {
     const hash = window.location.hash.replace('#', '');
     if (!hash) return;
     const HASH_TO_TAB: Record<string, TabRoute> = {
-      log: '/log',
-      timer: '/timer',
-      history: '/history',
-      templates: '/templates',
-      goals: '/goals',
+      calendar: '/calendar',
+      recipes: '/recipes',
+      me: '/me',
     };
     const tab = HASH_TO_TAB[hash];
     if (tab && containerRef.current) {
-      const index = TAB_ROUTES.indexOf(tab);
-      containerRef.current.scrollTo({ left: index * containerRef.current.clientWidth });
-      setActiveTab(tab);
-      setScrollProgress(index);
-      window.history.replaceState(null, '', tab);
+      const frame = requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        const index = TAB_ROUTES.indexOf(tab);
+        containerRef.current.scrollTo({ left: index * containerRef.current.clientWidth });
+        setActiveTab(tab);
+        setScrollProgress(index);
+        window.history.replaceState(null, '', tab);
+      });
+      return () => cancelAnimationFrame(frame);
     }
   }, []);
 
   return (
-    <TabCtx.Provider value={{ activeTab, scrollProgress, scrollToTab, logSearchParams, clearLogSearchParams, containerRef, paneHeight }}>
+    <TabCtx.Provider value={{ activeTab, scrollProgress, scrollToTab, logSearchParams, clearLogSearchParams, setContainerElement, paneHeight }}>
       {children}
     </TabCtx.Provider>
   );

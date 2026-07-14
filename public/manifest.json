@@ -1,7 +1,7 @@
 {
-  "name": "Workout Tracker",
-  "short_name": "Workouts",
-  "description": "Track workouts, set goals, analyze patterns.",
+  "name": "我的冰箱",
+  "short_name": "冰箱",
+  "description": "管理冰箱库存、做菜日历和个人菜谱。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1714",

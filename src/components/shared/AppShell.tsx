@@ -2,14 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRef, useCallback, useEffect, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useCallback, useEffect, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
-  Home,
-  PenLine,
-  Timer,
-  BarChart3,
-  Dumbbell,
-  Target,
+  Refrigerator,
+  CalendarDays,
+  BookOpen,
+  User,
   ChevronLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -17,13 +15,11 @@ import { startViewTransition } from '@/lib/view-transition';
 import { HapticsProvider, useHaptics } from '@/components/shared/HapticsProvider';
 import { useTabNavigation, type TabRoute } from '@/components/shared/TabContext';
 
-const NAV_ITEMS: { tab: TabRoute; label: string; icon: typeof Home }[] = [
-  { tab: '/', label: 'Today', icon: Home },
-  { tab: '/log', label: 'Log', icon: PenLine },
-  { tab: '/timer', label: 'Timer', icon: Timer },
-  { tab: '/history', label: 'History', icon: BarChart3 },
-  { tab: '/templates', label: 'Templates', icon: Dumbbell },
-  { tab: '/goals', label: 'Goals', icon: Target },
+const NAV_ITEMS: { tab: TabRoute; label: string; icon: typeof Refrigerator }[] = [
+  { tab: '/', label: '冰箱', icon: Refrigerator },
+  { tab: '/calendar', label: '日历', icon: CalendarDays },
+  { tab: '/recipes', label: '菜谱', icon: BookOpen },
+  { tab: '/me', label: '我的', icon: User },
 ];
 
 
@@ -34,6 +30,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Tabbed mode: inside TabProvider (main app)
   // Standalone mode: export/settings pages (no tab context)
   const isTabbed = !!tabCtx;
+  const activeTab = tabCtx ? tabCtx.activeTab : undefined;
+  const scrollProgress = tabCtx ? tabCtx.scrollProgress : undefined;
+  const scrollToTab = tabCtx ? tabCtx.scrollToTab : undefined;
+  const setContainerElement = tabCtx ? tabCtx.setContainerElement : undefined;
 
   /** Navigate back with View Transition animation (reverse pop) */
   const handleBackClick = (e: MouseEvent<HTMLAnchorElement>) => {
@@ -59,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     )}>
       {isTabbed ? (
         <div
-          ref={tabCtx.containerRef}
+          ref={setContainerElement}
           className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory flex"
           style={{
             WebkitOverflowScrolling: 'touch',
@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 min-h-[44px] text-sm font-medium text-primary transition-colors hover:bg-accent/60 active:bg-accent"
               >
                 <ChevronLeft className="h-5 w-5" />
-                <span>Back</span>
+                <span>返回</span>
               </Link>
             </div>
           </header>
@@ -98,7 +98,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <BottomNav
         navItems={NAV_ITEMS}
         isTabbed={isTabbed}
-        tabCtx={tabCtx}
+        activeTab={activeTab}
+        scrollProgress={scrollProgress}
+        scrollToTab={scrollToTab}
         onBackClick={handleBackClick}
       />
     </div>
@@ -117,28 +119,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 interface BottomNavProps {
   navItems: typeof NAV_ITEMS;
   isTabbed: boolean;
-  tabCtx: ReturnType<typeof useTabNavigation>;
+  activeTab?: TabRoute;
+  scrollProgress?: number;
+  scrollToTab?: (tab: TabRoute) => void;
   onBackClick: (e: MouseEvent<HTMLAnchorElement>) => void;
 }
 
-function BottomNav({ navItems, isTabbed, tabCtx, onBackClick }: BottomNavProps) {
+function BottomNav({ navItems, isTabbed, activeTab, scrollProgress, scrollToTab, onBackClick }: BottomNavProps) {
   const navRef = useRef<HTMLElement>(null);
   const dragging = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
   const lastTabIndex = useRef(-1);
   const haptics = useHaptics();
-  const prevActiveTab = useRef(tabCtx?.activeTab);
+  const prevActiveTab = useRef(activeTab);
 
-  const progress = tabCtx?.scrollProgress ?? 0;
+  const progress = scrollProgress ?? 0;
   const tabCount = navItems.length;
 
   // Fire haptic on every tab change (swipe, drag, or tap)
   useEffect(() => {
-    if (!isTabbed || !tabCtx) return;
-    if (tabCtx.activeTab !== prevActiveTab.current) {
-      prevActiveTab.current = tabCtx.activeTab;
+    if (!isTabbed || !activeTab) return;
+    if (activeTab !== prevActiveTab.current) {
+      prevActiveTab.current = activeTab;
       haptics.trigger('selection');
     }
-  }, [tabCtx?.activeTab, isTabbed, haptics]);
+  }, [activeTab, isTabbed, haptics]);
 
   /** Find which tab button the pointer is over */
   const getTabIndexAtX = useCallback((clientX: number): number => {
@@ -157,22 +162,24 @@ function BottomNav({ navItems, isTabbed, tabCtx, onBackClick }: BottomNavProps) 
   const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
     dragging.current = true;
+    setIsDragging(true);
     lastTabIndex.current = getTabIndexAtX(e.clientX);
     navRef.current?.setPointerCapture(e.pointerId);
   }, [getTabIndexAtX]);
 
   const handlePointerMove = useCallback((e: ReactPointerEvent<HTMLElement>) => {
-    if (!dragging.current || !isTabbed || !tabCtx) return;
+    if (!dragging.current || !isTabbed || !scrollToTab) return;
 
     const idx = getTabIndexAtX(e.clientX);
     if (idx !== -1 && idx !== lastTabIndex.current) {
       lastTabIndex.current = idx;
-      tabCtx.scrollToTab(navItems[idx].tab);
+      scrollToTab(navItems[idx].tab);
     }
-  }, [isTabbed, tabCtx, navItems, getTabIndexAtX]);
+  }, [isTabbed, scrollToTab, navItems, getTabIndexAtX]);
 
   const handlePointerUp = useCallback(() => {
     dragging.current = false;
+    setIsDragging(false);
     lastTabIndex.current = -1;
   }, []);
 
@@ -200,7 +207,7 @@ function BottomNav({ navItems, isTabbed, tabCtx, onBackClick }: BottomNavProps) 
             style={{
               width: `${100 / tabCount}%`,
               left: `${(progress / tabCount) * 100}%`,
-              transition: dragging.current ? 'none' : undefined,
+              transition: isDragging ? 'none' : undefined,
             }}
             aria-hidden
           />
@@ -210,7 +217,7 @@ function BottomNav({ navItems, isTabbed, tabCtx, onBackClick }: BottomNavProps) 
           // Compute how "active" this tab is: 1 when exactly on it, 0 when >= 1 tab away
           const distance = isTabbed ? Math.abs(progress - index) : Infinity;
           const activity = isTabbed ? Math.max(0, 1 - distance) : 0;
-          const isNearest = isTabbed ? tabCtx?.activeTab === tab : false;
+          const isNearest = isTabbed ? activeTab === tab : false;
 
           // Interpolate opacity: muted-foreground (~0.5) to primary (1.0)
           const opacity = 0.5 + activity * 0.5;
@@ -225,7 +232,7 @@ function BottomNav({ navItems, isTabbed, tabCtx, onBackClick }: BottomNavProps) 
                 key={tab}
                 type="button"
                 data-tab-index={index}
-                onClick={() => tabCtx?.scrollToTab(tab)}
+                onClick={() => scrollToTab?.(tab)}
                 className={cn(
                   'group relative flex flex-col items-center justify-center gap-0.5 rounded-xl min-w-[44px] min-h-[44px] px-2 py-1.5 text-[11px] select-none',
                   activity > 0.5 ? 'text-primary' : 'text-muted-foreground',
